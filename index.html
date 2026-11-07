@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Portal analítico de indicadores macroeconômicos brasileiros" />
+    <title>Indicadores Macroeconômicos Brasileiros</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-left" aria-hidden="true"></div>
+    <div class="ambient ambient-right" aria-hidden="true"></div>
+
+    <main id="project-page" class="project-page">
+      <section class="cover-shell" aria-labelledby="project-heading">
+        <h1 id="project-heading" class="sr-only">Arquitetura de Dados do Projeto</h1>
+        <img
+          class="cover-image"
+          src="./assets/capa-arquitetura.png"
+          alt="Arquitetura de dados do projeto: Banco Central, Bronze, Prata, Ouro e Consumo"
+        />
+        <button id="cover-entry" class="cover-entry" type="button">
+          <span class="sr-only">Entrar no Relatório</span>
+        </button>
+      </section>
+      <p class="cover-hint">Clique em <strong>Entrar no Relatório</strong> para explorar os dados.</p>
+    </main>
+
+    <div id="report-page" class="report-page is-hidden">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobile-menu" type="button" aria-label="Abrir navegação">☰</button>
+        <nav id="main-nav" class="main-nav" aria-label="Navegação principal">
+          <button class="nav-item is-active" data-page="insights" type="button"><span aria-hidden="true">▥</span> Relatório</button>
+        </nav>
+        <div class="top-actions" aria-hidden="true">
+          <span class="search-pill">⌕</span>
+          <span class="action-icon">♢</span>
+        </div>
+      </header>
+
+      <section class="report-shell">
+        <div class="page-heading">
+          <div class="heading-copy">
+            <h1 id="page-title">Panorama Histórico</h1>
+            <p id="page-subtitle">Acompanhe 4 dos principais indicadores macroeconômicos</p>
+          </div>
+          <section id="filters" class="filter-bar" aria-label="Filtros do relatório">
+            <label class="field">
+              <span>Período inicial</span>
+              <input id="start-date" type="date" min="2020-01-01" />
+            </label>
+            <label class="field">
+              <span>Período final</span>
+              <input id="end-date" type="date" min="2020-01-01" />
+            </label>
+            <label class="field field-wide">
+              <span>Indicador</span>
+              <select id="indicator-select">
+                <option value="432">Meta Selic</option>
+                <option value="433">IPCA</option>
+                <option value="1">Dólar</option>
+                <option value="4389">CDI</option>
+              </select>
+            </label>
+            <div class="filter-actions">
+              <button id="export" class="button button-outline" type="button">⇩ Exportar</button>
+              <button id="architecture-project" class="button button-back" type="button"><span aria-hidden="true">▱</span> Arquitetura do Projeto</button>
+            </div>
+          </section>
+        </div>
+
+        <div id="status" class="status is-hidden" role="status"></div>
+
+        <section id="insights-view" class="page-view">
+          <div id="kpi-grid" class="kpi-grid" aria-label="Indicadores principais"></div>
+
+          <div class="analytics-grid">
+            <article class="card chart-card">
+              <header class="card-header">
+                <div>
+                  <p class="card-kicker">SÉRIE HISTÓRICA</p>
+                  <h2 id="chart-title">Evolução da Meta Selic</h2>
+                </div>
+                <span id="chart-unit" class="unit-chip">—</span>
+              </header>
+              <div id="chart" class="chart" aria-label="Gráfico histórico do indicador"></div>
+            </article>
+
+            <aside class="card insight-panel">
+              <header class="card-header blue-header">
+                <div>
+                  <h2>Insights do período</h2>
+                </div>
+                <span class="insight-icon" aria-hidden="true">◉</span>
+              </header>
+              <div id="insight-list" class="insight-list"></div>
+            </aside>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
