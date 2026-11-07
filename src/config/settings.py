@@ -17,6 +17,7 @@ class Settings:
     db_name: str
     db_schema: str
     silver_schema: str
+    gold_schema: str
     db_user: str
     db_password: str
     bronze_path: Path
@@ -37,6 +38,7 @@ class Settings:
             db_name=os.getenv("DB_NAME", "db_emp_dados_junior"),
             db_schema=os.getenv("DB_SCHEMA", "bronze"),
             silver_schema=os.getenv("DB_SCHEMA_PRATA", "prata"),
+            gold_schema=os.getenv("DB_SCHEMA_OURO", "ouro"),
             db_user=db_user,
             db_password=os.getenv("DB_PASSWORD", ""),
             bronze_path=PROJECT_ROOT / os.getenv("DATA_BRONZE_PATH", "data/bronze"),
