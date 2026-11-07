@@ -3,11 +3,11 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Bronze-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Arquitetura](https://img.shields.io/badge/Arquitetura-Medallion-C89B3C)](#arquitetura)
-[![Status](https://img.shields.io/badge/Bronze_e_Prata-Concluídas-2EA44F)](#resultado-validado)
+[![Status](https://img.shields.io/badge/Bronze%2C_Prata_e_Ouro-Concluídas-2EA44F)](#resultado-validado)
 
 Projeto final da **Trilha Júnior do Emprega Dados** para ingestão, preservação e rastreabilidade de indicadores econômicos publicados pelo Banco Central do Brasil.
 
-O pipeline consulta quatro séries do SGS, preserva os dados brutos em Parquet e PostgreSQL e transforma as observações em uma camada Prata normalizada, auditável e sem duplicidades.
+O pipeline consulta quatro séries do SGS, preserva os dados brutos em Parquet e PostgreSQL, normaliza as observações na camada Prata e disponibiliza um modelo estrela na camada Ouro para consumo analítico.
 
 ## Sumário
 
@@ -16,6 +16,7 @@ O pipeline consulta quatro séries do SGS, preserva os dados brutos em Parquet e
 - [Arquitetura](#arquitetura)
 - [Regras da camada Bronze](#regras-da-camada-bronze)
 - [Camada Prata](#camada-prata)
+- [Camada Ouro](#camada-ouro)
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Tecnologias](#tecnologias)
 - [Como executar](#como-executar)
@@ -39,7 +40,7 @@ Construir uma camada Bronze auditável para dados econômicos, garantindo:
 - isolamento de falhas entre os indicadores;
 - registro de sucesso, ausência de dados e falhas.
 
-A implementação segue a [SPEC 001 — Camada Bronze](specs/SPEC_001_BRONZE.md) e a [SPEC 002 — Camada Prata](specs/SPEC_002_PRATA.md).
+A implementação segue a [SPEC 001 — Camada Bronze](specs/SPEC_001_BRONZE.md), a [SPEC 002 — Camada Prata](specs/SPEC_002_PRATA.md) e a [SPEC 003 — Camada Ouro](specs/SPEC_003_OURO.md).
 
 ## Indicadores coletados
 
@@ -58,7 +59,7 @@ A implementação segue a [SPEC 001 — Camada Bronze](specs/SPEC_001_BRONZE.md)
 
 ## Arquitetura
 
-O projeto utiliza a arquitetura Medallion. As camadas Bronze e Prata estão implementadas; a camada Ouro faz parte da evolução planejada.
+O projeto utiliza a arquitetura Medallion com as três camadas implementadas.
 
 ```mermaid
 flowchart LR
@@ -74,6 +75,9 @@ flowchart LR
     G --> I[Normalização e<br/>qualidade]
     I --> J[Deduplicação por<br/>código + data]
     J --> K[(PostgreSQL<br/>schema prata)]
+    K --> L[Modelagem<br/>dimensional]
+    L --> M[(PostgreSQL<br/>schema ouro)]
+    M --> N[Power BI / BI]
 ```
 
 ### Fluxo de uma execução
@@ -116,6 +120,18 @@ A chave natural é `(codigo_sgs, data_referencia)`. Quando existem várias vers�
 
 O modo incremental controla cada arquivo pelo identificador e SHA-256. O modo completo relê todo o histórico Bronze e reaplica as mesmas regras de forma determinística.
 
+## Camada Ouro
+
+A carga Ouro lê somente os dados consolidados da Prata e cria um modelo estrela composto por:
+
+| Tabela | Tipo | Finalidade |
+|---|---|---|
+| `ouro.dim_calendario` | Dimensão | Datas contínuas desde 01/01/2023, com atributos em português |
+| `ouro.dim_indicador` | Dimensão | Cadastro SCD Tipo 1 dos indicadores |
+| `ouro.fct_indicadores_economicos` | Fato | Uma observação por indicador e data |
+
+A fato utiliza chaves estrangeiras para as duas dimensões e unicidade em `(id_indicador, id_data)`. A reconciliação usa UPSERT, preserva as chaves substitutas e reflete novos valores ou alterações da Prata sem usar `TRUNCATE`.
+
 ## Estrutura do projeto
 
 ```text
@@ -139,13 +155,15 @@ O modo incremental controla cada arquivo pelo identificador e SHA-256. O modo co
 │
 ├── specs/
 │   ├── SPEC_001_BRONZE.md
-│   └── SPEC_002_PRATA.md
+│   ├── SPEC_002_PRATA.md
+│   └── SPEC_003_OURO.md
 │
 ├── src/
 │   ├── config/                   # Leitura e validação do .env
 │   ├── database/                 # PostgreSQL e repositórios
 │   ├── ingestion/                # Cliente BCB, Parquet e orquestração
 │   ├── transformation/           # Normalização, qualidade e deduplicação
+│   ├── analytics/                # Modelo estrela e pipeline Ouro
 │   ├── utils/                    # Configuração de logs
 │   └── models.py                 # Modelos compartilhados
 │
@@ -212,6 +230,7 @@ DB_PORT=5432
 DB_NAME=db_emp_dados_junior
 DB_SCHEMA=bronze
 DB_SCHEMA_PRATA=prata
+DB_SCHEMA_OURO=ouro
 DB_USER=seu_usuario
 DB_PASSWORD=sua_senha
 
@@ -251,6 +270,14 @@ Reprocessamento completo de todos os arquivos Bronze:
 python -B -m src.transformation.pipeline --full
 ```
 
+### 7. Executar a carga Ouro
+
+```powershell
+python -B -m src.analytics.pipeline
+```
+
+A carga sempre reconcilia a Ouro com a Prata por UPSERT. Como o volume é reduzido, não é necessária uma tabela técnica de controle no schema analítico.
+
 ## Persistência e auditoria
 
 ### `bronze.tb_arquivos_parquet`
@@ -287,6 +314,26 @@ Registra cada tentativa com um dos status:
 | `tb_log_transformacao` | Métricas de cada processamento |
 | `tb_historico_alteracoes` | Valores substituídos por versões mais recentes |
 | `tb_controle_processamento` | Controle incremental dos arquivos Bronze |
+
+### Tabelas do schema `ouro`
+
+O schema contém exclusivamente `dim_calendario`, `dim_indicador` e `fct_indicadores_economicos`. Logs da rotina são gravados somente em `arquivos_locais/logs/gold_pipeline.log`.
+
+Exemplo de consulta para BI:
+
+```sql
+SELECT
+    calendario.data,
+    calendario.ano,
+    calendario.nome_mes,
+    indicador.nome_indicador,
+    indicador.unidade_medida,
+    fato.valor_indicador
+FROM ouro.fct_indicadores_economicos fato
+JOIN ouro.dim_calendario calendario USING (id_data)
+JOIN ouro.dim_indicador indicador USING (id_indicador)
+ORDER BY indicador.codigo_sgs, calendario.data;
+```
 
 ### Consultas úteis
 
@@ -332,9 +379,11 @@ A suíte atual verifica:
 - rejeição de registros inválidos;
 - validação do hash antes da transformação;
 - deduplicação determinística e independente da ordem de leitura.
+- geração contínua e atributos em português da dimensão calendário;
+- contrato que restringe a Ouro às três tabelas analíticas.
 
 ```text
-9 passed
+14 passed
 ```
 
 ## Resultado validado
@@ -361,6 +410,8 @@ Na primeira transformação Prata, oito arquivos provenientes de duas ingestões
 
 A segunda execução incremental selecionou zero arquivos. O reprocessamento completo releu as 6.766 linhas e manteve as 3.383 observações sem duplicidades.
 
+Na carga Ouro foram criadas 1.407 datas contínuas, quatro indicadores e 3.383 fatos. A reexecução inseriu e atualizou zero registros, mantendo as 3.383 observações e comprovando a idempotência.
+
 ## Segurança
 
 - O `.env` permanece somente na máquina local.
@@ -385,7 +436,8 @@ arquivos_locais/
 - [x] Testes unitários da API e do Parquet.
 - [x] Camada Prata: tipagem, padronização e qualidade dos dados.
 - [x] Deduplicação, rejeições, histórico e processamento incremental.
-- [ ] Camada Ouro: indicadores analíticos e modelagem para consumo.
+- [x] Camada Ouro: modelo estrela com dimensões de calendário e indicador.
+- [x] UPSERT idempotente com PKs, FKs e preservação de chaves substitutas.
 - [ ] Testes de integração automatizados com PostgreSQL.
 - [ ] Integração contínua no GitHub Actions.
 
