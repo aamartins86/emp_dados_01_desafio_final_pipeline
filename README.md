@@ -4,6 +4,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Bronze-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Arquitetura](https://img.shields.io/badge/Arquitetura-Medallion-C89B3C)](#arquitetura)
 [![Status](https://img.shields.io/badge/Bronze%2C_Prata_e_Ouro-Concluídas-2EA44F)](#resultado-validado)
+[![CI](https://github.com/aamartins86/emp_dados_01_desafio_final_pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/aamartins86/emp_dados_01_desafio_final_pipeline/actions/workflows/ci.yml)
 
 Projeto final da **Trilha Júnior do Emprega Dados** para ingestão, preservação e rastreabilidade de indicadores econômicos publicados pelo Banco Central do Brasil.
 
@@ -141,6 +142,9 @@ A fato utiliza chaves estrangeiras para as duas dimensões e unicidade em `(id_i
 .
 ├── .env.example
 ├── .gitignore
+├── .github/
+│   └── workflows/
+│       └── ci.yml                 # Testes contínuos com PostgreSQL
 ├── pytest.ini
 ├── README.md
 ├── requirements.txt
@@ -178,6 +182,9 @@ A fato utiliza chaves estrangeiras para as duas dimensões e unicidade em `(id_i
 │   └── models.py                 # Modelos compartilhados
 │
 └── tests/
+    ├── integration/
+    │   ├── conftest.py
+    │   └── test_postgres_pipeline.py
     ├── test_bcb_client.py
     ├── test_parquet.py
     ├── test_silver_normalizer.py
@@ -445,10 +452,28 @@ A suíte atual verifica:
 - validação do hash antes da transformação;
 - deduplicação determinística e independente da ordem de leitura.
 - geração contínua e atributos em português da dimensão calendário;
-- contrato que restringe a Ouro às três tabelas analíticas.
+- contrato que restringe a Ouro às três tabelas analíticas;
+- persistência transacional de arquivo e log da Bronze em PostgreSQL real;
+- reconciliação Prata → Ouro, integridade referencial e idempotência.
+
+Os testes unitários podem ser executados sem banco. Nesse cenário, os dois testes de integração são ignorados de forma explícita:
+
+```powershell
+python -B -m pytest -q
+```
+
+Para executar toda a suíte usando o PostgreSQL configurado no `.env`:
+
+```powershell
+$env:RUN_POSTGRES_INTEGRATION = "1"
+python -B -m pytest -q
+Remove-Item Env:RUN_POSTGRES_INTEGRATION
+```
+
+O GitHub Actions executa automaticamente a suíte completa em cada `push` e `pull request` para `main`. O workflow cria um PostgreSQL 16 temporário, informa a conexão por `POSTGRES_TEST_DSN` e não utiliza o `.env` local.
 
 ```text
-18 passed
+20 passed
 ```
 
 ## Resultado validado
@@ -505,8 +530,8 @@ arquivos_locais/
 - [x] UPSERT idempotente com PKs, FKs e preservação de chaves substitutas.
 - [x] SPEC e protótipos visuais do portal analítico.
 - [x] Implementação e publicação pública do portal analítico.
-- [ ] Testes de integração automatizados com PostgreSQL.
-- [ ] Integração contínua no GitHub Actions.
+- [x] Testes de integração automatizados com PostgreSQL.
+- [x] Integração contínua no GitHub Actions.
 
 ## Autor
 
