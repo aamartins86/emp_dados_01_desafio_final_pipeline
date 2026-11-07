@@ -7,6 +7,8 @@
 
 Projeto final da **Trilha Júnior do Emprega Dados** para ingestão, preservação e rastreabilidade de indicadores econômicos publicados pelo Banco Central do Brasil.
 
+> **Relatório público:** [acessar o Portal de Indicadores Macroeconômicos](https://aamartins86.github.io/emp_dados_01_desafio_final_pipeline/#insights)
+
 O pipeline consulta quatro séries do SGS, preserva os dados brutos em Parquet e PostgreSQL, normaliza as observações na camada Prata e disponibiliza um modelo estrela na camada Ouro para consumo analítico.
 
 ## Sumário
@@ -20,6 +22,7 @@ O pipeline consulta quatro séries do SGS, preserva os dados brutos em Parquet e
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Tecnologias](#tecnologias)
 - [Como executar](#como-executar)
+- [Portal analítico](#portal-analítico)
 - [Persistência e auditoria](#persistência-e-auditoria)
 - [Testes](#testes)
 - [Resultado validado](#resultado-validado)
@@ -40,7 +43,7 @@ Construir uma camada Bronze auditável para dados econômicos, garantindo:
 - isolamento de falhas entre os indicadores;
 - registro de sucesso, ausência de dados e falhas.
 
-A implementação segue a [SPEC 001 — Camada Bronze](specs/SPEC_001_BRONZE.md), a [SPEC 002 — Camada Prata](specs/SPEC_002_PRATA.md) e a [SPEC 003 — Camada Ouro](specs/SPEC_003_OURO.md).
+A implementação de dados segue a [SPEC 001 — Camada Bronze](specs/SPEC_001_BRONZE.md), a [SPEC 002 — Camada Prata](specs/SPEC_002_PRATA.md) e a [SPEC 003 — Camada Ouro](specs/SPEC_003_OURO.md). O portal para consumo analítico está definido na [SPEC 004 — Portal Analítico](specs/SPEC_004_PORTAL_ANALITICO.md).
 
 ## Indicadores coletados
 
@@ -52,7 +55,7 @@ A implementação segue a [SPEC 001 — Camada Bronze](specs/SPEC_001_BRONZE.md)
 | CDI anualizado | `4389` | Diária | `cdi/` |
 
 - **Fonte:** API SGS do Banco Central do Brasil.
-- **Data inicial:** `01/01/2023`.
+- **Data inicial:** `01/01/2020`.
 - **Data final:** calculada no momento da execução.
 - **Autenticação na API:** não requerida.
 - **Formato de origem:** JSON.
@@ -126,7 +129,7 @@ A carga Ouro lê somente os dados consolidados da Prata e cria um modelo estrela
 
 | Tabela | Tipo | Finalidade |
 |---|---|---|
-| `ouro.dim_calendario` | Dimensão | Datas contínuas desde 01/01/2023, com atributos em português |
+| `ouro.dim_calendario` | Dimensão | Datas contínuas desde 01/01/2020, com atributos em português |
 | `ouro.dim_indicador` | Dimensão | Cadastro SCD Tipo 1 dos indicadores |
 | `ouro.fct_indicadores_economicos` | Fato | Uma observação por indicador e data |
 
@@ -156,7 +159,13 @@ A fato utiliza chaves estrangeiras para as duas dimensões e unicidade em `(id_i
 ├── specs/
 │   ├── SPEC_001_BRONZE.md
 │   ├── SPEC_002_PRATA.md
-│   └── SPEC_003_OURO.md
+│   ├── SPEC_003_OURO.md
+│   └── SPEC_004_PORTAL_ANALITICO.md
+│
+├── docs/
+│   └── images/                   # Capturas da versão pública
+│
+├── dist/                         # Portal estático e snapshot público da Ouro
 │
 ├── src/
 │   ├── config/                   # Leitura e validação do .env
@@ -164,6 +173,7 @@ A fato utiliza chaves estrangeiras para as duas dimensões e unicidade em `(id_i
 │   ├── ingestion/                # Cliente BCB, Parquet e orquestração
 │   ├── transformation/           # Normalização, qualidade e deduplicação
 │   ├── analytics/                # Modelo estrela e pipeline Ouro
+│   ├── web/                      # API local, frontend e exportação estática
 │   ├── utils/                    # Configuração de logs
 │   └── models.py                 # Modelos compartilhados
 │
@@ -171,7 +181,9 @@ A fato utiliza chaves estrangeiras para as duas dimensões e unicidade em `(id_i
     ├── test_bcb_client.py
     ├── test_parquet.py
     ├── test_silver_normalizer.py
-    └── test_silver_deduplication.py
+    ├── test_silver_deduplication.py
+    ├── test_gold_calendar.py
+    └── test_web_server.py
 ```
 
 ## Tecnologias
@@ -278,6 +290,59 @@ python -B -m src.analytics.pipeline
 
 A carga sempre reconcilia a Ouro com a Prata por UPSERT. Como o volume é reduzido, não é necessária uma tabela técnica de controle no schema analítico.
 
+### 8. Executar o portal analítico
+
+Com o PostgreSQL em execução e a camada Ouro carregada:
+
+```powershell
+python -B -m src.web.server
+```
+
+Abra no navegador:
+
+```text
+http://127.0.0.1:8000
+```
+
+O servidor utiliza as credenciais do `.env` somente no backend. O navegador
+recebe apenas os dados analíticos necessários e não acessa diretamente o
+PostgreSQL.
+
+Para gerar a versão estática utilizada na publicação pública:
+
+```powershell
+python -B -m src.web.export_static
+```
+
+O comando exporta para `dist/` somente os arquivos do portal e um snapshot JSON
+da camada Ouro. Credenciais, `.env`, Parquets e logs não são incluídos.
+
+## Portal analítico
+
+**Acesso público:** [Indicadores Macroeconômicos Brasileiros](https://aamartins86.github.io/emp_dados_01_desafio_final_pipeline/#insights)
+
+O portal implementa a [SPEC 004](specs/SPEC_004_PORTAL_ANALITICO.md) e contém:
+
+- página Projeto com a arquitetura aprovada;
+- acesso ao relatório pelo botão `Entrar no Relatório`;
+- aba `Relatório` com cabeçalho e filtros compactos para notebook;
+- KPIs reais de Selic, IPCA, Dólar e CDI;
+- filtros por indicador e período;
+- gráfico histórico e insights determinísticos;
+- exportação CSV;
+- navegação simplificada entre Relatório e Arquitetura do Projeto;
+- layout responsivo para desktop, tablet e celular.
+
+As consultas utilizam exclusivamente as três tabelas do schema `ouro`.
+
+### Relatório
+
+![Relatório público com Selic, IPCA, Dólar e CDI](docs/images/relatorio-publico.png)
+
+### Arquitetura do projeto
+
+![Arquitetura Medallion do projeto](docs/images/arquitetura-projeto.png)
+
 ## Persistência e auditoria
 
 ### `bronze.tb_arquivos_parquet`
@@ -383,34 +448,34 @@ A suíte atual verifica:
 - contrato que restringe a Ouro às três tabelas analíticas.
 
 ```text
-14 passed
+18 passed
 ```
 
 ## Resultado validado
 
-Execução de referência realizada em **07/11/2026**, identificada pelo UUID `04bc3676-3e3c-437f-89d2-33d2a2b87ba8`:
+Execução de referência realizada em **07/11/2026**, identificada pelo UUID `69335090-d8a9-4be2-b146-de6d45079afd`, cobrindo o período iniciado em `01/01/2020`:
 
 | Indicador | Registros | HTTP | Persistência |
 |---|---:|---:|---|
-| Meta Selic | 1.407 | 200 | Sucesso |
-| IPCA | 45 | 200 | Sucesso |
-| Dólar americano — venda | 966 | 200 | Sucesso |
-| CDI anualizado | 965 | 200 | Sucesso |
+| Meta Selic | 2.503 | 200 | Sucesso |
+| IPCA | 81 | 200 | Sucesso |
+| Dólar americano — venda | 1.719 | 200 | Sucesso |
+| CDI anualizado | 1.718 | 200 | Sucesso |
 
 Os quatro Parquets foram relidos com sucesso, tiveram hashes SHA-256 válidos e foram persistidos junto aos respectivos metadados e corpos JSON originais.
 
-Na primeira transformação Prata, oito arquivos provenientes de duas ingestões Bronze foram processados:
+No reprocessamento completo da Prata, 12 arquivos Bronze foram processados:
 
 | Métrica | Resultado |
 |---|---:|
-| Registros lidos | 6.766 |
-| Duplicidades removidas | 3.383 |
-| Observações inseridas | 3.383 |
+| Registros lidos | 12.787 |
+| Duplicidades removidas | 6.766 |
+| Novas observações inseridas | 2.638 |
+| Observações inalteradas | 3.383 |
+| Total consolidado na Prata | 6.021 |
 | Rejeições | 0 |
 
-A segunda execução incremental selecionou zero arquivos. O reprocessamento completo releu as 6.766 linhas e manteve as 3.383 observações sem duplicidades.
-
-Na carga Ouro foram criadas 1.407 datas contínuas, quatro indicadores e 3.383 fatos. A reexecução inseriu e atualizou zero registros, mantendo as 3.383 observações e comprovando a idempotência.
+Na carga Ouro foram reconciliadas 2.503 datas contínuas, quatro indicadores e 6.021 fatos. A carga inseriu as 2.638 novas observações históricas e preservou as 3.383 já existentes.
 
 ## Segurança
 
@@ -438,6 +503,8 @@ arquivos_locais/
 - [x] Deduplicação, rejeições, histórico e processamento incremental.
 - [x] Camada Ouro: modelo estrela com dimensões de calendário e indicador.
 - [x] UPSERT idempotente com PKs, FKs e preservação de chaves substitutas.
+- [x] SPEC e protótipos visuais do portal analítico.
+- [x] Implementação e publicação pública do portal analítico.
 - [ ] Testes de integração automatizados com PostgreSQL.
 - [ ] Integração contínua no GitHub Actions.
 
