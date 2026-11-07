@@ -6,7 +6,7 @@
 
 ## Escopo implementado
 
-Ingestão dos indicadores Meta Selic (SGS 432), IPCA (SGS 433), dólar americano — venda — diário (SGS 1) e CDI anualizado (SGS 4389), entre `01/01/2023` e a data da execução.
+Ingestão dos indicadores Meta Selic (SGS 432), IPCA (SGS 433), dólar americano — venda — diário (SGS 1) e CDI anualizado (SGS 4389), entre `01/01/2020` e a data da execução.
 
 O pipeline mantém os campos `data` e `valor` como strings, preserva a resposta JSON e o corpo HTTP bruto, gera Parquet válido, calcula SHA-256 e persiste o histórico no PostgreSQL.
 

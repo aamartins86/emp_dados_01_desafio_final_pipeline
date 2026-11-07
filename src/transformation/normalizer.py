@@ -12,7 +12,7 @@ from src.transformation.catalog import INDICATOR_CATALOG
 from src.transformation.models import BronzeFile, RejectedRecord, SilverRecord
 
 
-PROJECT_START_DATE = date(2023, 1, 1)
+PROJECT_START_DATE = date(2020, 1, 1)
 DATE_PATTERN = re.compile(r"^\d{2}/\d{2}/\d{4}$")
 VALUE_PATTERN = re.compile(r"^[+-]?\d+(?:\.\d+)?$")
 SCALE = Decimal("0.00000001")

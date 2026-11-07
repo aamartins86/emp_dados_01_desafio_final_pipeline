@@ -39,6 +39,18 @@ def test_normaliza_data_e_valor_sem_perder_precisao() -> None:
     assert normalized[0].origin_row_number == 1
 
 
+def test_aceita_data_desde_o_inicio_de_2020() -> None:
+    bronze_file = make_bronze_file([{"data": "01/01/2020", "valor": "4.50"}])
+
+    normalized, rejected, total = normalize_file(
+        bronze_file, processing_date=date(2026, 11, 7)
+    )
+
+    assert total == 1
+    assert rejected == []
+    assert normalized[0].reference_date == date(2020, 1, 1)
+
+
 def test_rejeita_data_e_valor_invalidos_sem_substituir_por_zero() -> None:
     bronze_file = make_bronze_file(
         [

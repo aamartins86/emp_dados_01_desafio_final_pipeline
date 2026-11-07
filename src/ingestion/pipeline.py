@@ -20,7 +20,7 @@ from src.models import BronzeArtifact, IngestionLog
 from src.utils.logging_config import configure_logging
 
 
-START_DATE = date(2023, 1, 1)
+START_DATE = date(2020, 1, 1)
 
 
 def _write_local_copy(path: Path, content: bytes) -> None:

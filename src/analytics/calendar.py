@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from src.analytics.models import CalendarDay
 
 
-CALENDAR_START = date(2023, 1, 1)
+CALENDAR_START = date(2020, 1, 1)
 
 
 def build_calendar(start: date, end: date) -> list[CalendarDay]:

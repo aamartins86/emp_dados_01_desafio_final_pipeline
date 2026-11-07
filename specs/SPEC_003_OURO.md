@@ -162,7 +162,7 @@ Disponibilizar atributos de calendário para permitir análises temporais e segm
 - nome_mes deverá ser apresentado em português, com a primeira letra maiúscula.
 - mes_ano deverá utilizar um formato adequado para exibição, como Jan/2026.
 - ano_mes deverá utilizar YYYYMM para ordenação.
-- O calendário iniciará em 01/01/2023.
+- O calendário iniciará em 01/01/2020.
 - A geração deverá contemplar as datas necessárias para os indicadores disponíveis e permitir extensão até a data atual.
 - A dimensão deverá possuir datas contínuas, incluindo finais de semana e feriados.
 - A ausência de observações econômicas não deverá impedir a existência de datas na dimensão.

@@ -148,7 +148,7 @@ def _calendar_end(
         ).format(sql.Identifier(silver_schema))
     ).fetchone()
     if minimum is not None and minimum < CALENDAR_START:
-        raise RuntimeError("A Prata contém data anterior ao início permitido: 01/01/2023")
+        raise RuntimeError("A Prata contém data anterior ao início permitido: 01/01/2020")
     return max(current_date, maximum or CALENDAR_START)
 
 
