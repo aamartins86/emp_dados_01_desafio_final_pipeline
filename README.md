@@ -3,11 +3,11 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Bronze-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Arquitetura](https://img.shields.io/badge/Arquitetura-Medallion-C89B3C)](#arquitetura)
-[![Status](https://img.shields.io/badge/Camada_Bronze-Concluída-2EA44F)](#resultado-validado)
+[![Status](https://img.shields.io/badge/Bronze_e_Prata-Concluídas-2EA44F)](#resultado-validado)
 
 Projeto final da **Trilha Júnior do Emprega Dados** para ingestão, preservação e rastreabilidade de indicadores econômicos publicados pelo Banco Central do Brasil.
 
-Nesta primeira etapa, o pipeline consulta quatro séries do SGS, preserva os dados recebidos sem transformações de negócio, gera arquivos Parquet e mantém o histórico de cada execução em um banco PostgreSQL local.
+O pipeline consulta quatro séries do SGS, preserva os dados brutos em Parquet e PostgreSQL e transforma as observações em uma camada Prata normalizada, auditável e sem duplicidades.
 
 ## Sumário
 
@@ -15,6 +15,7 @@ Nesta primeira etapa, o pipeline consulta quatro séries do SGS, preserva os dad
 - [Indicadores coletados](#indicadores-coletados)
 - [Arquitetura](#arquitetura)
 - [Regras da camada Bronze](#regras-da-camada-bronze)
+- [Camada Prata](#camada-prata)
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Tecnologias](#tecnologias)
 - [Como executar](#como-executar)
@@ -38,7 +39,7 @@ Construir uma camada Bronze auditável para dados econômicos, garantindo:
 - isolamento de falhas entre os indicadores;
 - registro de sucesso, ausência de dados e falhas.
 
-A implementação segue a [SPEC 001 — Camada Bronze](specs/SPEC_001_BRONZE.md).
+A implementação segue a [SPEC 001 — Camada Bronze](specs/SPEC_001_BRONZE.md) e a [SPEC 002 — Camada Prata](specs/SPEC_002_PRATA.md).
 
 ## Indicadores coletados
 
@@ -57,7 +58,7 @@ A implementação segue a [SPEC 001 — Camada Bronze](specs/SPEC_001_BRONZE.md)
 
 ## Arquitetura
 
-O projeto utiliza a arquitetura Medallion. A SPEC atual implementa exclusivamente a camada Bronze; as camadas Prata e Ouro fazem parte da evolução planejada.
+O projeto utiliza a arquitetura Medallion. As camadas Bronze e Prata estão implementadas; a camada Ouro faz parte da evolução planejada.
 
 ```mermaid
 flowchart LR
@@ -70,6 +71,9 @@ flowchart LR
     E --> G[(PostgreSQL<br/>schema bronze)]
     B -->|Corpo HTTP original| G
     G --> H
+    G --> I[Normalização e<br/>qualidade]
+    I --> J[Deduplicação por<br/>código + data]
+    J --> K[(PostgreSQL<br/>schema prata)]
 ```
 
 ### Fluxo de uma execução
@@ -99,6 +103,19 @@ Na camada Bronze os dados são preservados como publicados pela fonte. Portanto,
 
 Essas responsabilidades pertencem às próximas camadas da arquitetura.
 
+## Camada Prata
+
+A transformação lê exclusivamente os Parquets armazenados na Bronze e não realiza novas chamadas ao Banco Central. Os registros aprovados são convertidos para:
+
+- `data_referencia DATE`;
+- `valor NUMERIC(20,8)`;
+- código e dimensão do indicador;
+- execução, arquivo, data de ingestão e posição de origem.
+
+A chave natural é `(codigo_sgs, data_referencia)`. Quando existem várias versões, vence a observação da ingestão mais recente; valores alterados geram histórico e dados inválidos são registrados com o motivo da rejeição.
+
+O modo incremental controla cada arquivo pelo identificador e SHA-256. O modo completo relê todo o histórico Bronze e reaplica as mesmas regras de forma determinística.
+
 ## Estrutura do projeto
 
 ```text
@@ -121,18 +138,22 @@ Essas responsabilidades pertencem às próximas camadas da arquitetura.
 │   └── logs/
 │
 ├── specs/
-│   └── SPEC_001_BRONZE.md
+│   ├── SPEC_001_BRONZE.md
+│   └── SPEC_002_PRATA.md
 │
 ├── src/
 │   ├── config/                   # Leitura e validação do .env
 │   ├── database/                 # PostgreSQL e repositórios
 │   ├── ingestion/                # Cliente BCB, Parquet e orquestração
+│   ├── transformation/           # Normalização, qualidade e deduplicação
 │   ├── utils/                    # Configuração de logs
 │   └── models.py                 # Modelos compartilhados
 │
 └── tests/
     ├── test_bcb_client.py
-    └── test_parquet.py
+    ├── test_parquet.py
+    ├── test_silver_normalizer.py
+    └── test_silver_deduplication.py
 ```
 
 ## Tecnologias
@@ -190,6 +211,7 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=db_emp_dados_junior
 DB_SCHEMA=bronze
+DB_SCHEMA_PRATA=prata
 DB_USER=seu_usuario
 DB_PASSWORD=sua_senha
 
@@ -214,6 +236,20 @@ python -B -m src.ingestion.pipeline
 ```
 
 O pipeline tenta criar o database na primeira execução. Se `db_emp_dados_junior` já existir, o usuário precisa somente de acesso ao database e permissão para criar e gravar no schema configurado.
+
+### 6. Executar a transformação Prata
+
+Modo incremental, utilizado normalmente:
+
+```powershell
+python -B -m src.transformation.pipeline
+```
+
+Reprocessamento completo de todos os arquivos Bronze:
+
+```powershell
+python -B -m src.transformation.pipeline --full
+```
 
 ## Persistência e auditoria
 
@@ -240,6 +276,17 @@ Registra cada tentativa com um dos status:
 | `SUCESSO` | Parquet validado e persistido |
 | `SEM_DADOS` | API respondeu sem observações |
 | `FALHA` | Erro HTTP, JSON, Parquet ou persistência |
+
+### Tabelas do schema `prata`
+
+| Tabela | Finalidade |
+|---|---|
+| `tb_dim_indicador` | Cadastro oficial das séries SGS |
+| `tb_indicadores_economicos` | Observações normalizadas e únicas |
+| `tb_registros_rejeitados` | Dados inválidos e respectivos motivos |
+| `tb_log_transformacao` | Métricas de cada processamento |
+| `tb_historico_alteracoes` | Valores substituídos por versões mais recentes |
+| `tb_controle_processamento` | Controle incremental dos arquivos Bronze |
 
 ### Consultas úteis
 
@@ -281,9 +328,13 @@ A suíte atual verifica:
 - manutenção de `data` e `valor` como strings;
 - geração, leitura e integridade do Parquet;
 - geração do hash SHA-256.
+- normalização estrita de datas e valores;
+- rejeição de registros inválidos;
+- validação do hash antes da transformação;
+- deduplicação determinística e independente da ordem de leitura.
 
 ```text
-3 passed
+9 passed
 ```
 
 ## Resultado validado
@@ -298,6 +349,17 @@ Execução de referência realizada em **07/11/2026**, identificada pelo UUID `0
 | CDI anualizado | 965 | 200 | Sucesso |
 
 Os quatro Parquets foram relidos com sucesso, tiveram hashes SHA-256 válidos e foram persistidos junto aos respectivos metadados e corpos JSON originais.
+
+Na primeira transformação Prata, oito arquivos provenientes de duas ingestões Bronze foram processados:
+
+| Métrica | Resultado |
+|---|---:|
+| Registros lidos | 6.766 |
+| Duplicidades removidas | 3.383 |
+| Observações inseridas | 3.383 |
+| Rejeições | 0 |
+
+A segunda execução incremental selecionou zero arquivos. O reprocessamento completo releu as 6.766 linhas e manteve as 3.383 observações sem duplicidades.
 
 ## Segurança
 
@@ -321,7 +383,8 @@ arquivos_locais/
 - [x] Persistência de Parquet, JSON e corpo HTTP no PostgreSQL.
 - [x] Logs, UUID, hash e histórico de execuções.
 - [x] Testes unitários da API e do Parquet.
-- [ ] Camada Prata: tipagem, padronização e qualidade dos dados.
+- [x] Camada Prata: tipagem, padronização e qualidade dos dados.
+- [x] Deduplicação, rejeições, histórico e processamento incremental.
 - [ ] Camada Ouro: indicadores analíticos e modelagem para consumo.
 - [ ] Testes de integração automatizados com PostgreSQL.
 - [ ] Integração contínua no GitHub Actions.
