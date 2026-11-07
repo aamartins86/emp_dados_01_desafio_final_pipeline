@@ -1,0 +1,5 @@
+# Credenciais locais na raiz do projeto
+.env
+
+# Centraliza dados, logs e outros artefatos somente locais
+arquivos_locais/
